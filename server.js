@@ -1,8 +1,10 @@
 const express = require('express');
 const bodyParser = require('body-parser');
 const multer = require('multer');
+const fs = require('fs');
 const path = require('path');
-const mongoose = require('mongoose');
+// const mongoose = require('mongoose');
+const mongodb = require('mongodb');
 
 const app = express();
 
@@ -24,12 +26,26 @@ const upload = multer({
 });
 
 // configuring mongoose
-mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost/imageUploads-template',
-{
-  useNewUrlParser: true,
-  useCreateIndex: true,
-  useFindAndModify: false,
+// mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost/imageUploads-template',
+// {
+//   useNewUrlParser: true,
+//   useCreateIndex: true,
+//   useFindAndModify: false,
+//   useUnifiedTopology: true,
+// });
+// configure using mongodb npm
+const MongoClient = mongodb.MongoClient;
+const url = 'mongodb://localhost:27017';
+
+MongoClient.connect(url, {
   useUnifiedTopology: true,
+  useNewUrlParser: true,
+}, (err, client) => {
+  if(err) return console.log(err);
+  db = client.db('imageupload-multer');
+  app.listen(3000, () => {
+    console.log('mongodb listening at 3000');
+  });
 });
 
 // configure the upload file route
@@ -55,6 +71,28 @@ app.post('/uploadmultiple', upload.array('myFiles', 12), (req,res,next) => {
   res.send(files);
 })
 
+// image upload to mongodb
+app.post('/uploadphoto', upload.single('myImage'), (req, res) => {
+  const img = fs.readFileSync(req.file.path);
+  const encode_image = img.toString('base64');
+  // define the json object for image
+  const finalImage = {
+    // takes 3 properties
+    contentType: req.file.mimetype,
+    path: req.file.path,
+    image: new Buffer(encode_image, 'base64'),
+  };
+  // insert into database
+  db.collection('imageupload-multer').insertOne(finalImage, (err, result) => {
+  if(err) return console.log('error', err);
+
+  console.log('saved to database', result);
+
+  res.contentType(finalImage.contentType);
+  res.send(finalImage.image);
+})
+
+})
 
 // configure routes
 app.get('/', (req, res) => {
